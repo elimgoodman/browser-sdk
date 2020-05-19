@@ -89,13 +89,12 @@ describe('rum track renew session', () => {
     expect(viewContext.id).not.toEqual(initialView)
   })
 
-  it('should send a final view event when the session is renewed', () => {
+  it('should not send a final view event when the session is renewed', () => {
     expect(getRumEventCount()).toEqual(1)
 
     lifeCycle.notify(LifeCycleEventType.SESSION_RENEWED)
-    expect(getViewEvent(0).id).toBe(getViewEvent(1).id)
-    expect(getViewEvent(0).id).not.toBe(getViewEvent(2).id)
-    expect(getRumEventCount()).toEqual(3)
+    expect(getRumEventCount()).toEqual(2)
+    expect(getViewEvent(0).id).not.toBe(getViewEvent(1).id)
   })
 })
 
