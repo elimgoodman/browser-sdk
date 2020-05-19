@@ -6,7 +6,7 @@ import { RumSession } from '../src/rumSession'
 import { UserAction, UserActionType } from '../src/userActionCollection'
 import { startViewCollection, THROTTLE_VIEW_UPDATE_PERIOD, View, viewContext } from '../src/viewCollection'
 
-function setup(lifeCycle: LifeCycle = new LifeCycle()) {
+function setupViewCollection(lifeCycle: LifeCycle = new LifeCycle()) {
   spyOn(history, 'pushState').and.callFake((_: any, __: string, pathname: string) => {
     const url = `http://localhost${pathname}`
     fakeLocation.pathname = getPathName(url)
@@ -19,17 +19,22 @@ function setup(lifeCycle: LifeCycle = new LifeCycle()) {
       return '42'
     },
   }
-  startViewCollection(fakeLocation as Location, lifeCycle, fakeSession as RumSession)
+  return startViewCollection(fakeLocation as Location, lifeCycle, fakeSession as RumSession)
 }
 
 describe('rum track url change', () => {
   let initialView: string
   let initialLocation: Location
+  let viewCollection: { stop(): void }
 
   beforeEach(() => {
-    setup()
+    viewCollection = setupViewCollection()
     initialView = viewContext.id
     initialLocation = viewContext.location
+  })
+
+  afterEach(() => {
+    viewCollection.stop()
   })
 
   it('should update view id on path change', () => {
@@ -69,17 +74,23 @@ function spyOnViews() {
   addRumEvent = jasmine.createSpy()
   lifeCycle = new LifeCycle()
   lifeCycle.subscribe(LifeCycleEventType.VIEW_COLLECTED, addRumEvent)
-  setup(lifeCycle)
+  const viewCollection = setupViewCollection(lifeCycle)
 
-  return { lifeCycle, getViewEvent, getRumEventCount }
+  return { lifeCycle, getViewEvent, getRumEventCount, viewCollection }
 }
 
 describe('rum track renew session', () => {
   let lifeCycle: LifeCycle
   let getRumEventCount: () => number
   let getViewEvent: (index: number) => View
+  let viewCollection: { stop(): void }
+
   beforeEach(() => {
-    ;({ lifeCycle, getRumEventCount, getViewEvent } = spyOnViews())
+    ;({ lifeCycle, getRumEventCount, getViewEvent, viewCollection } = spyOnViews())
+  })
+
+  afterEach(() => {
+    viewCollection.stop()
   })
 
   it('should update page view id on renew session', () => {

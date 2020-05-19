@@ -249,6 +249,7 @@ describe('rum session', () => {
   let server: sinon.SinonFakeServer
   let original: PerformanceObserver | undefined
   let stubBuilder: PerformanceObserverStubBuilder
+  let viewCollection: { stop(): void }
 
   beforeEach(() => {
     if (isIE()) {
@@ -261,6 +262,7 @@ describe('rum session', () => {
   })
 
   afterEach(() => {
+    viewCollection.stop()
     server.restore()
     browserWindow.PerformanceObserver = original
   })
@@ -273,7 +275,7 @@ describe('rum session', () => {
     }
     const lifeCycle = new LifeCycle()
     startRum('appId', lifeCycle, configuration as Configuration, trackedWithResourcesSession, internalMonitoring)
-    startViewCollection(location, lifeCycle, trackedWithResourcesSession)
+    viewCollection = startViewCollection(location, lifeCycle, trackedWithResourcesSession)
     startPerformanceCollection(lifeCycle, trackedWithResourcesSession)
     server.requests = []
 
@@ -293,7 +295,7 @@ describe('rum session', () => {
     }
     const lifeCycle = new LifeCycle()
     startRum('appId', lifeCycle, configuration as Configuration, trackedWithResourcesSession, internalMonitoring)
-    startViewCollection(location, lifeCycle, trackedWithResourcesSession)
+    viewCollection = startViewCollection(location, lifeCycle, trackedWithResourcesSession)
     startPerformanceCollection(lifeCycle, trackedWithResourcesSession)
     server.requests = []
 
@@ -333,7 +335,7 @@ describe('rum session', () => {
     }
     const lifeCycle = new LifeCycle()
     startRum('appId', lifeCycle, configuration as Configuration, session, internalMonitoring)
-    startViewCollection(location, lifeCycle, session)
+    viewCollection = startViewCollection(location, lifeCycle, session)
     startPerformanceCollection(lifeCycle, session)
     server.requests = []
 
@@ -358,7 +360,7 @@ describe('rum session', () => {
     }
     const lifeCycle = new LifeCycle()
     startRum('appId', lifeCycle, configuration as Configuration, session, internalMonitoring)
-    startViewCollection(location, lifeCycle, session)
+    viewCollection = startViewCollection(location, lifeCycle, session)
     startPerformanceCollection(lifeCycle, session)
     server.requests = []
 
@@ -384,7 +386,7 @@ describe('rum session', () => {
     const lifeCycle = new LifeCycle()
     server.requests = []
     startRum('appId', lifeCycle, configuration as Configuration, session, internalMonitoring)
-    startViewCollection(location, lifeCycle, session)
+    viewCollection = startViewCollection(location, lifeCycle, session)
 
     const initialRequests = getServerRequestBodies<ExpectedRequestBody>(server)
     expect(initialRequests.length).toEqual(1)
@@ -477,6 +479,7 @@ describe('rum session keep alive', () => {
 
 describe('rum init', () => {
   let server: sinon.SinonFakeServer
+  let viewCollection: { stop(): void }
 
   beforeEach(() => {
     if (isIE()) {
@@ -486,6 +489,7 @@ describe('rum init', () => {
   })
 
   afterEach(() => {
+    viewCollection.stop()
     server.restore()
   })
 
@@ -498,7 +502,7 @@ describe('rum init', () => {
 
     const lifeCycle = new LifeCycle()
     startRum('appId', lifeCycle, configuration as Configuration, session, internalMonitoring)
-    startViewCollection(location, lifeCycle, session)
+    viewCollection = startViewCollection(location, lifeCycle, session)
 
     expect(server.requests.length).toBeGreaterThan(0)
   })
@@ -509,6 +513,7 @@ describe('rum global context', () => {
   let lifeCycle: LifeCycle
   let RUM: RumApi
   let server: sinon.SinonFakeServer
+  let viewCollection: { stop(): void }
 
   beforeEach(() => {
     const session = {
@@ -519,11 +524,12 @@ describe('rum global context', () => {
     server = sinon.fakeServer.create()
     lifeCycle = new LifeCycle()
     RUM = startRum('appId', lifeCycle, configuration as Configuration, session, internalMonitoring) as RumApi
-    startViewCollection(location, lifeCycle, session)
+    viewCollection = startViewCollection(location, lifeCycle, session)
     server.requests = []
   })
 
   afterEach(() => {
+    viewCollection.stop()
     server.restore()
   })
 
@@ -557,6 +563,7 @@ describe('rum user action', () => {
   let lifeCycle: LifeCycle
   let RUM: RumApi
   let server: sinon.SinonFakeServer
+  let viewCollection: { stop(): void }
 
   beforeEach(() => {
     const session = {
@@ -567,11 +574,12 @@ describe('rum user action', () => {
     server = sinon.fakeServer.create()
     lifeCycle = new LifeCycle()
     RUM = startRum('appId', lifeCycle, configuration as Configuration, session, internalMonitoring) as RumApi
-    startViewCollection(location, lifeCycle, session)
+    viewCollection = startViewCollection(location, lifeCycle, session)
     server.requests = []
   })
 
   afterEach(() => {
+    viewCollection.stop()
     server.restore()
   })
 
