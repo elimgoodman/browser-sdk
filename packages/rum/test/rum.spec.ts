@@ -16,7 +16,7 @@ import { startPerformanceCollection } from '../src/performanceCollection'
 import { handleResourceEntry, RumEvent, RumResourceEvent, startRum } from '../src/rum'
 import { RumGlobal } from '../src/rum.entry'
 import { UserAction, UserActionType } from '../src/userActionCollection'
-import { startViewCollection } from '../src/viewCollection'
+import { SESSION_KEEP_ALIVE_INTERVAL, startViewCollection } from '../src/viewCollection'
 
 interface BrowserWindow extends Window {
   PerformanceObserver?: PerformanceObserver
@@ -38,6 +38,21 @@ const configuration = {
 
 const internalMonitoring: InternalMonitoring = {
   setExternalContextProvider: () => undefined,
+}
+
+type RumApi = Omit<RumGlobal, 'init'>
+function getRumMessage(server: sinon.SinonFakeServer, index: number) {
+  return JSON.parse(server.requests[index].requestBody) as RumEvent
+}
+
+interface ExpectedRequestBody {
+  evt: {
+    category: string
+  }
+  session_id: string
+  view: {
+    id: string
+  }
 }
 
 describe('rum handle performance entry', () => {
@@ -371,16 +386,6 @@ describe('rum session', () => {
     startRum('appId', lifeCycle, configuration as Configuration, session, internalMonitoring)
     startViewCollection(location, lifeCycle, session)
 
-    interface ExpectedRequestBody {
-      evt: {
-        category: string
-      }
-      session_id: string
-      view: {
-        id: string
-      }
-    }
-
     const initialRequests = getServerRequestBodies<ExpectedRequestBody>(server)
     expect(initialRequests.length).toEqual(1)
     expect(initialRequests[0].evt.category).toEqual('view')
@@ -397,6 +402,76 @@ describe('rum session', () => {
     expect(subsequentRequests[0].evt.category).toEqual('view')
     expect(subsequentRequests[0].session_id).toEqual('43')
     expect(subsequentRequests[0].view.id).not.toEqual(initialRequests[0].view.id)
+  })
+})
+
+describe('rum session keep alive', () => {
+  let server: sinon.SinonFakeServer
+  let requests: ExpectedRequestBody[]
+  let isSessionTracked: boolean
+  let viewCollection: { stop(): void }
+
+  beforeEach(() => {
+    if (isIE()) {
+      pending('no full rum support')
+    }
+    server = sinon.fakeServer.create()
+    jasmine.clock().install()
+    isSessionTracked = true
+    const session = {
+      getId: () => undefined,
+      isTracked: () => isSessionTracked,
+      isTrackedWithResource: () => true,
+    }
+    const lifeCycle = new LifeCycle()
+    startRum('appId', lifeCycle, configuration as Configuration, session, internalMonitoring)
+    viewCollection = startViewCollection(location, lifeCycle, session)
+  })
+
+  afterEach(() => {
+    viewCollection.stop()
+    jasmine.clock().uninstall()
+    server.restore()
+  })
+
+  it('should send a view update regularly', () => {
+    // initial view
+    requests = getServerRequestBodies<ExpectedRequestBody>(server)
+    server.requests = []
+    expect(requests.length).toEqual(1)
+    expect(requests[0].evt.category).toEqual('view')
+
+    jasmine.clock().tick(SESSION_KEEP_ALIVE_INTERVAL)
+
+    // view update
+    requests = getServerRequestBodies<ExpectedRequestBody>(server)
+    server.requests = []
+    expect(requests.length).toEqual(1)
+    expect(requests[0].evt.category).toEqual('view')
+
+    jasmine.clock().tick(SESSION_KEEP_ALIVE_INTERVAL)
+
+    // view update
+    requests = getServerRequestBodies<ExpectedRequestBody>(server)
+    server.requests = []
+    expect(requests.length).toEqual(1)
+    expect(requests[0].evt.category).toEqual('view')
+  })
+
+  it('should not send view update when session is expired', () => {
+    // initial view
+    requests = getServerRequestBodies<ExpectedRequestBody>(server)
+    server.requests = []
+    expect(requests.length).toEqual(1)
+    expect(requests[0].evt.category).toEqual('view')
+
+    // expire session
+    isSessionTracked = false
+
+    jasmine.clock().tick(SESSION_KEEP_ALIVE_INTERVAL)
+
+    requests = getServerRequestBodies<ExpectedRequestBody>(server)
+    expect(requests.length).toEqual(0)
   })
 })
 
@@ -428,11 +503,6 @@ describe('rum init', () => {
     expect(server.requests.length).toBeGreaterThan(0)
   })
 })
-
-type RumApi = Omit<RumGlobal, 'init'>
-function getRumMessage(server: sinon.SinonFakeServer, index: number) {
-  return JSON.parse(server.requests[index].requestBody) as RumEvent
-}
 
 describe('rum global context', () => {
   const FAKE_ERROR: Partial<ErrorMessage> = { message: 'test' }
