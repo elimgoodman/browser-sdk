@@ -67,6 +67,7 @@ export function startViewCollection(location: Location, lifeCycle: LifeCycle, se
 
   return {
     stop() {
+      currentView.end()
       clearInterval(keepAliveInterval)
     },
   }
