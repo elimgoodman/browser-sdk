@@ -25,16 +25,16 @@ function setupViewCollection(lifeCycle: LifeCycle = new LifeCycle()) {
 describe('rum track url change', () => {
   let initialView: string
   let initialLocation: Location
-  let viewCollection: { stop(): void }
+  let stopViewCollection: () => void
 
   beforeEach(() => {
-    viewCollection = setupViewCollection()
+    ;({ stop: stopViewCollection } = setupViewCollection())
     initialView = viewContext.id
     initialLocation = viewContext.location
   })
 
   afterEach(() => {
-    viewCollection.stop()
+    stopViewCollection()
   })
 
   it('should update view id on path change', () => {
@@ -74,23 +74,23 @@ function spyOnViews() {
   addRumEvent = jasmine.createSpy()
   lifeCycle = new LifeCycle()
   lifeCycle.subscribe(LifeCycleEventType.VIEW_COLLECTED, addRumEvent)
-  const viewCollection = setupViewCollection(lifeCycle)
+  const { stop: stopViewCollection } = setupViewCollection(lifeCycle)
 
-  return { lifeCycle, getViewEvent, getRumEventCount, viewCollection }
+  return { lifeCycle, getViewEvent, getRumEventCount, stopViewCollection }
 }
 
 describe('rum track renew session', () => {
   let lifeCycle: LifeCycle
   let getRumEventCount: () => number
   let getViewEvent: (index: number) => View
-  let viewCollection: { stop(): void }
+  let stopViewCollection: () => void
 
   beforeEach(() => {
-    ;({ lifeCycle, getRumEventCount, getViewEvent, viewCollection } = spyOnViews())
+    ;({ lifeCycle, getRumEventCount, getViewEvent, stopViewCollection } = spyOnViews())
   })
 
   afterEach(() => {
-    viewCollection.stop()
+    stopViewCollection()
   })
 
   it('should update page view id on renew session', () => {
