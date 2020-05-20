@@ -73,6 +73,35 @@ export function throttle(
 }
 
 /**
+ * Performs a deep merge of objects and arrays
+ * - arrays values are merged index by index
+ * - objects are merged by keys
+ * - values get replaced, unless undefined
+ *
+ * ⚠️ this method does not prevent infinite loops while merging circular references ⚠️
+ *
+ * @param {destination, ...toMerge} any - values to merge
+ * @returns {any} New merged value
+ */
+export const deepMerge = (destination: any, ...toMerge: any[]): any =>
+  toMerge.reduce((value1: any, value2: any) => {
+    if (Array.isArray(value1) && Array.isArray(value2)) {
+      return [...Array(Math.max(value1.length, value2.length))].map((_, index) =>
+        deepMerge(value1[index], value2[index])
+      )
+    } else if (typeof value1 === 'object' && typeof value2 === 'object') {
+      return Array.from(new Set([...Object.keys(value1), ...Object.keys(value2)])).reduce(
+        (merged, key) => ({
+          ...merged,
+          [key]: deepMerge(value1[key], value2[key]),
+        }),
+        {}
+      )
+    }
+    return value2 === undefined ? value1 : value2
+  }, destination)
+
+/**
  * UUID v4
  * from https://gist.github.com/jed/982883
  */

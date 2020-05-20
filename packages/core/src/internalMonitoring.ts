@@ -1,8 +1,4 @@
 // tslint:disable ban-types
-
-import lodashAssign from 'lodash.assign'
-import lodashMerge from 'lodash.merge'
-
 import { Configuration } from './configuration'
 import { toStackTraceString } from './errorCollection'
 import { computeStackTrace } from './tracekit'
@@ -27,7 +23,7 @@ export interface MonitoringMessage {
   }
 }
 
-const monitoringConfiguration: {
+let monitoringConfiguration: {
   batch?: Batch<MonitoringMessage>
   debugMode?: boolean
   maxMessagesPerPage: number
@@ -45,7 +41,7 @@ export function startInternalMonitoring(configuration: Configuration): InternalM
       configuration.maxMessageSize,
       configuration.flushTimeout,
       () =>
-        lodashMerge(
+        utils.deepMerge(
           {
             date: new Date().getTime(),
             view: {
@@ -57,11 +53,12 @@ export function startInternalMonitoring(configuration: Configuration): InternalM
         )
     )
 
-    lodashAssign(monitoringConfiguration, {
+    monitoringConfiguration = {
+      ...monitoringConfiguration,
       batch,
       maxMessagesPerPage: configuration.maxInternalMonitoringMessagesPerPage,
       sentMessageCount: 0,
-    })
+    }
   }
   return {
     setExternalContextProvider: (provider: () => utils.Context) => {

@@ -17,8 +17,8 @@ import {
   RequestType,
   ResourceKind,
   withSnakeCaseKeys,
+  deepMerge,
 } from '@datadog/browser-core'
-import lodashMerge from 'lodash.merge'
 
 import { LifeCycle, LifeCycleEventType } from './lifeCycle'
 import { matchRequestTiming } from './matchRequestTiming'
@@ -152,7 +152,7 @@ export function startRum(
   let globalContext: Context = {}
 
   internalMonitoring.setExternalContextProvider(() =>
-    lodashMerge(
+    deepMerge(
       {
         application_id: applicationId,
         session_id: viewContext.sessionId,
@@ -231,7 +231,7 @@ function startRumBatch(
     configuration.batchBytesLimit,
     configuration.maxMessageSize,
     configuration.flushTimeout,
-    () => lodashMerge(withSnakeCaseKeys(rumContextProvider()), globalContextProvider()),
+    () => deepMerge(withSnakeCaseKeys(rumContextProvider()), globalContextProvider()),
     beforeUnloadCallback
   )
   return {

@@ -11,8 +11,8 @@ import {
   InternalMonitoring,
   monitored,
   noop,
+  deepMerge,
 } from '@datadog/browser-core'
-import lodashMerge from 'lodash.merge'
 
 import { LoggerSession } from './loggerSession'
 import { LogsGlobal } from './logs.entry'
@@ -62,7 +62,7 @@ export function startLogger(
   let globalContext: Context = {}
 
   internalMonitoring.setExternalContextProvider(() =>
-    lodashMerge({ session_id: session.getId() }, globalContext, getRUMInternalContext())
+    deepMerge({ session_id: session.getId() }, globalContext, getRUMInternalContext())
   )
 
   const batch = new Batch<LogsMessage>(
@@ -72,7 +72,7 @@ export function startLogger(
     configuration.maxMessageSize,
     configuration.flushTimeout,
     () =>
-      lodashMerge(
+      deepMerge(
         {
           date: new Date().getTime(),
           session_id: session.getId(),
@@ -141,7 +141,7 @@ export class Logger {
   @monitored
   log(message: string, messageContext = {}, status = StatusType.info) {
     if (this.session.isTracked() && STATUS_PRIORITIES[status] >= STATUS_PRIORITIES[this.level]) {
-      this.handler({ message, status, ...lodashMerge({}, this.loggerContext, messageContext) })
+      this.handler({ message, status, ...deepMerge({}, this.loggerContext, messageContext) })
     }
   }
 
@@ -163,7 +163,7 @@ export class Logger {
         origin: ErrorOrigin.LOGGER,
       },
     }
-    this.log(message, lodashMerge({}, errorOrigin, messageContext), StatusType.error)
+    this.log(message, deepMerge({}, errorOrigin, messageContext), StatusType.error)
   }
 
   setContext(context: Context) {
