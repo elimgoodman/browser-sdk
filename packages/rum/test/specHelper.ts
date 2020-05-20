@@ -6,6 +6,7 @@ import {
   SPEC_ENDPOINTS,
 } from '@datadog/browser-core'
 import sinon from 'sinon'
+import { RumGlobal } from '../src'
 import { LifeCycle } from '../src/lifeCycle'
 import { startPerformanceCollection } from '../src/performanceCollection'
 import { startRum } from '../src/rum'
@@ -15,6 +16,8 @@ import { startViewCollection } from '../src/viewCollection'
 interface BrowserWindow extends Window {
   PerformanceObserver?: PerformanceObserver
 }
+
+export type RumApi = Omit<RumGlobal, 'init'>
 
 const internalMonitoringStub: InternalMonitoring = {
   setExternalContextProvider: () => undefined,
@@ -31,6 +34,7 @@ export interface TestSetupBuilder {
   withRum: () => TestSetupBuilder
   withViewCollection: () => TestSetupBuilder
   withPerformanceCollection: () => TestSetupBuilder
+  withFakeClock: () => TestSetupBuilder
   withFakeServer: () => TestSetupBuilder
   withPerformanceObserverStubBuilder: () => TestSetupBuilder
 
@@ -42,6 +46,7 @@ export interface TestIO {
   lifeCycle: LifeCycle
   server: sinon.SinonFakeServer
   stubBuilder: PerformanceObserverStubBuilder
+  rumApi: RumApi
 }
 
 export function setup(): TestSetupBuilder {
@@ -56,6 +61,7 @@ export function setup(): TestSetupBuilder {
 
   let server: sinon.SinonFakeServer
   let stubBuilder: PerformanceObserverStubBuilder
+  let rumApi: RumApi
 
   const setupBuilder = {
     withSession(sessionStub: RumSession) {
@@ -63,8 +69,8 @@ export function setup(): TestSetupBuilder {
       return setupBuilder
     },
     withRum() {
-      buildTasks.push(() =>
-        startRum('appId', lifeCycle, configuration as Configuration, session, internalMonitoringStub)
+      buildTasks.push(
+        () => (rumApi = startRum('appId', lifeCycle, configuration as Configuration, session, internalMonitoringStub))
       )
       return setupBuilder
     },
@@ -77,6 +83,11 @@ export function setup(): TestSetupBuilder {
     },
     withPerformanceCollection() {
       buildTasks.push(() => startPerformanceCollection(lifeCycle, session))
+      return setupBuilder
+    },
+    withFakeClock() {
+      jasmine.clock().install()
+      cleanupTasks.push(() => jasmine.clock().uninstall())
       return setupBuilder
     },
     withFakeServer() {
@@ -94,7 +105,7 @@ export function setup(): TestSetupBuilder {
     },
     build() {
       buildTasks.forEach((task) => task())
-      return { server, lifeCycle, stubBuilder }
+      return { server, lifeCycle, stubBuilder, rumApi }
     },
     cleanup() {
       cleanupTasks.forEach((task) => task())

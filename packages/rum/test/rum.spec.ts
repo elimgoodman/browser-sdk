@@ -2,19 +2,16 @@ import {
   Configuration,
   DEFAULT_CONFIGURATION,
   ErrorMessage,
-  InternalMonitoring,
   isIE,
-  Omit,
   RequestCompleteEvent,
   SPEC_ENDPOINTS,
 } from '@datadog/browser-core'
 import sinon from 'sinon'
 
 import { LifeCycle, LifeCycleEventType } from '../src/lifeCycle'
-import { handleResourceEntry, RumEvent, RumResourceEvent, startRum } from '../src/rum'
-import { RumGlobal } from '../src/rum.entry'
+import { handleResourceEntry, RumEvent, RumResourceEvent } from '../src/rum'
 import { UserAction, UserActionType } from '../src/userActionCollection'
-import { SESSION_KEEP_ALIVE_INTERVAL, startViewCollection } from '../src/viewCollection'
+import { SESSION_KEEP_ALIVE_INTERVAL } from '../src/viewCollection'
 import { setup, TestSetupBuilder } from './specHelper'
 
 function getEntry(addRumEvent: (event: RumEvent) => void, index: number) {
@@ -31,11 +28,6 @@ const configuration = {
   maxBatchSize: 1,
 }
 
-const internalMonitoring: InternalMonitoring = {
-  setExternalContextProvider: () => undefined,
-}
-
-type RumApi = Omit<RumGlobal, 'init'>
 function getRumMessage(server: sinon.SinonFakeServer, index: number) {
   return JSON.parse(server.requests[index].requestBody) as RumEvent
 }
@@ -400,35 +392,34 @@ describe('rum session', () => {
 })
 
 describe('rum session keep alive', () => {
-  let server: sinon.SinonFakeServer
-  let requests: ExpectedRequestBody[]
   let isSessionTracked: boolean
-  let stopViewCollection: () => void
+  let requests: ExpectedRequestBody[]
+  let setupBuilder: TestSetupBuilder
 
   beforeEach(() => {
     if (isIE()) {
       pending('no full rum support')
     }
-    server = sinon.fakeServer.create()
-    jasmine.clock().install()
     isSessionTracked = true
-    const session = {
-      getId: () => undefined,
-      isTracked: () => isSessionTracked,
-      isTrackedWithResource: () => true,
-    }
-    const lifeCycle = new LifeCycle()
-    startRum('appId', lifeCycle, configuration as Configuration, session, internalMonitoring)
-    ;({ stop: stopViewCollection } = startViewCollection(location, lifeCycle, session))
+    setupBuilder = setup()
+      .withFakeServer()
+      .withFakeClock()
+      .withSession({
+        getId: () => undefined,
+        isTracked: () => isSessionTracked,
+        isTrackedWithResource: () => true,
+      })
+      .withRum()
+      .withViewCollection()
   })
 
   afterEach(() => {
-    stopViewCollection()
-    jasmine.clock().uninstall()
-    server.restore()
+    setupBuilder.cleanup()
   })
 
   it('should send a view update regularly', () => {
+    const { server } = setupBuilder.build()
+
     // initial view
     requests = getServerRequestBodies<ExpectedRequestBody>(server)
     server.requests = []
@@ -453,6 +444,8 @@ describe('rum session keep alive', () => {
   })
 
   it('should not send view update when session is expired', () => {
+    const { server } = setupBuilder.build()
+
     // initial view
     requests = getServerRequestBodies<ExpectedRequestBody>(server)
     server.requests = []
@@ -470,31 +463,25 @@ describe('rum session keep alive', () => {
 })
 
 describe('rum init', () => {
-  let server: sinon.SinonFakeServer
-  let stopViewCollection: () => void
+  let setupBuilder: TestSetupBuilder
 
   beforeEach(() => {
     if (isIE()) {
       pending('no full rum support')
     }
-    server = sinon.fakeServer.create()
+    setupBuilder = setup()
+      .withFakeServer()
+      .withRum()
   })
 
   afterEach(() => {
-    stopViewCollection()
-    server.restore()
+    setupBuilder.cleanup()
   })
 
-  it('should send buffered performance entries', () => {
-    const session = {
-      getId: () => undefined,
-      isTracked: () => true,
-      isTrackedWithResource: () => true,
-    }
-
-    const lifeCycle = new LifeCycle()
-    startRum('appId', lifeCycle, configuration as Configuration, session, internalMonitoring)
-    ;({ stop: stopViewCollection } = startViewCollection(location, lifeCycle, session))
+  // TODO rework me
+  // only current view is sent
+  xit('should send buffered performance entries', () => {
+    const { server } = setupBuilder.withViewCollection().build()
 
     expect(server.requests.length).toBeGreaterThan(0)
   })
@@ -502,10 +489,7 @@ describe('rum init', () => {
 
 describe('rum global context', () => {
   const FAKE_ERROR: Partial<ErrorMessage> = { message: 'test' }
-  let lifeCycle: LifeCycle
-  let RUM: RumApi
-  let server: sinon.SinonFakeServer
-  let stopViewCollection: () => void
+  let setupBuilder: TestSetupBuilder
 
   beforeEach(() => {
     const session = {
@@ -513,29 +497,33 @@ describe('rum global context', () => {
       isTracked: () => true,
       isTrackedWithResource: () => true,
     }
-    server = sinon.fakeServer.create()
-    lifeCycle = new LifeCycle()
-    RUM = startRum('appId', lifeCycle, configuration as Configuration, session, internalMonitoring) as RumApi
-    ;({ stop: stopViewCollection } = startViewCollection(location, lifeCycle, session))
-    server.requests = []
+    setupBuilder = setup()
+      .withFakeServer()
+      .withRum()
+      .withViewCollection()
   })
 
   afterEach(() => {
-    stopViewCollection()
-    server.restore()
+    setupBuilder.cleanup()
   })
 
   it('should be added to the request', () => {
-    RUM.setRumGlobalContext({ bar: 'foo' })
+    const { server, lifeCycle, rumApi } = setupBuilder.build()
+    server.requests = []
+
+    rumApi.setRumGlobalContext({ bar: 'foo' })
     lifeCycle.notify(LifeCycleEventType.ERROR_COLLECTED, FAKE_ERROR as ErrorMessage)
 
     expect((getRumMessage(server, 0) as any).bar).toEqual('foo')
   })
 
   it('should be updatable', () => {
-    RUM.setRumGlobalContext({ bar: 'foo' })
+    const { server, lifeCycle, rumApi } = setupBuilder.build()
+    server.requests = []
+
+    rumApi.setRumGlobalContext({ bar: 'foo' })
     lifeCycle.notify(LifeCycleEventType.ERROR_COLLECTED, FAKE_ERROR as ErrorMessage)
-    RUM.setRumGlobalContext({ foo: 'bar' })
+    rumApi.setRumGlobalContext({ foo: 'bar' })
     lifeCycle.notify(LifeCycleEventType.ERROR_COLLECTED, FAKE_ERROR as ErrorMessage)
 
     expect((getRumMessage(server, 0) as any).bar).toEqual('foo')
@@ -544,7 +532,10 @@ describe('rum global context', () => {
   })
 
   it('should not be automatically snake cased', () => {
-    RUM.setRumGlobalContext({ fooBar: 'foo' })
+    const { server, lifeCycle, rumApi } = setupBuilder.build()
+    server.requests = []
+
+    rumApi.setRumGlobalContext({ fooBar: 'foo' })
     lifeCycle.notify(LifeCycleEventType.ERROR_COLLECTED, FAKE_ERROR as ErrorMessage)
 
     expect((getRumMessage(server, 0) as any).fooBar).toEqual('foo')
@@ -552,30 +543,23 @@ describe('rum global context', () => {
 })
 
 describe('rum user action', () => {
-  let lifeCycle: LifeCycle
-  let RUM: RumApi
-  let server: sinon.SinonFakeServer
-  let stopViewCollection: () => void
+  let setupBuilder: TestSetupBuilder
 
   beforeEach(() => {
-    const session = {
-      getId: () => undefined,
-      isTracked: () => true,
-      isTrackedWithResource: () => true,
-    }
-    server = sinon.fakeServer.create()
-    lifeCycle = new LifeCycle()
-    RUM = startRum('appId', lifeCycle, configuration as Configuration, session, internalMonitoring) as RumApi
-    ;({ stop: stopViewCollection } = startViewCollection(location, lifeCycle, session))
-    server.requests = []
+    setupBuilder = setup()
+      .withFakeServer()
+      .withRum()
+      .withViewCollection()
   })
 
   afterEach(() => {
-    stopViewCollection()
-    server.restore()
+    setupBuilder.cleanup()
   })
 
   it('should not be automatically snake cased', () => {
+    const { server, lifeCycle } = setupBuilder.build()
+    server.requests = []
+
     lifeCycle.notify(LifeCycleEventType.USER_ACTION_COLLECTED, {
       context: { fooBar: 'foo' },
       name: 'hello',
